@@ -1,31 +1,19 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_cashfree_pg_sdk/api/cfcard/cfcardlistener.dart';
-import 'package:flutter_cashfree_pg_sdk/api/cfcard/cfcardwidget.dart';
 import 'package:flutter_cashfree_pg_sdk/api/cferrorresponse/cferrorresponse.dart';
-import 'package:flutter_cashfree_pg_sdk/api/cfpayment/cfcard.dart';
-import 'package:flutter_cashfree_pg_sdk/api/cfpayment/cfcardpayment.dart';
 import 'package:flutter_cashfree_pg_sdk/api/cfpayment/cfdropcheckoutpayment.dart';
-import 'package:flutter_cashfree_pg_sdk/api/cfpayment/cfnetbanking.dart';
-import 'package:flutter_cashfree_pg_sdk/api/cfpayment/cfnetbankingpayment.dart';
-import 'package:flutter_cashfree_pg_sdk/api/cfpayment/cfupi.dart';
-import 'package:flutter_cashfree_pg_sdk/api/cfpayment/cfupipayment.dart';
-import 'package:flutter_cashfree_pg_sdk/api/cfpayment/cfwebcheckoutpayment.dart';
 import 'package:flutter_cashfree_pg_sdk/api/cfpaymentcomponents/cfpaymentcomponent.dart';
 import 'package:flutter_cashfree_pg_sdk/api/cfpaymentgateway/cfpaymentgatewayservice.dart';
 import 'package:flutter_cashfree_pg_sdk/api/cfsession/cfsession.dart';
 import 'package:flutter_cashfree_pg_sdk/api/cftheme/cftheme.dart';
 import 'package:flutter_cashfree_pg_sdk/utils/cfenums.dart';
 import 'package:flutter_cashfree_pg_sdk/utils/cfexceptions.dart';
-import 'package:flutter_cashfree_pg_sdk/api/cfupi/cfupiutils.dart';
 import 'package:http/http.dart' as http;
 
 class PaymentPage extends StatefulWidget {
-  final String oderToken;
-  String orderId;
-  PaymentPage({Key? key, required this.oderToken, required this.orderId})
-      : super(key: key);
+  const PaymentPage({super.key});
 
   @override
   State<PaymentPage> createState() => _PaymentPageState();
@@ -33,28 +21,14 @@ class PaymentPage extends StatefulWidget {
 
 class _PaymentPageState extends State<PaymentPage> {
   var cfPaymentGatewayService = CFPaymentGatewayService();
+  var amountController = TextEditingController();
 
-  // CFCardWidget? cfCardWidget;
+  String cf_order_id = '';
 
   @override
   void initState() {
     super.initState();
-    // paymentSessionId = widget.oderToken;
     cfPaymentGatewayService.setCallback(verifyPayment, onError);
-
-    final GlobalKey<CFCardWidgetState> myWidgetKey =
-        GlobalKey<CFCardWidgetState>();
-
-    CFUPIUtils().getUPIApps().then((value) {
-      print("value");
-      print(value);
-      for (var i = 0; i < (value?.length ?? 0); i++) {
-        var a = value?[i]["id"] as String ?? "";
-        if (a.contains("cashfree")) {
-          selectedId = value?[i]["id"];
-        }
-      }
-    });
   }
 
   @override
@@ -63,10 +37,21 @@ class _PaymentPageState extends State<PaymentPage> {
       appBar: AppBar(
         title: const Text('Cashfree payment'),
       ),
-      body: Center(
+      body: Padding(
+        padding: const EdgeInsets.all(15.0),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            TextButton(onPressed: pay, child: const Text("Pay")),
+            TextFormField(
+              controller: amountController,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.currency_rupee_outlined),
+                hintText: "Enter Amount",
+              ),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(onPressed: pay, child: const Text("Pay")),
           ],
         ),
       ),
@@ -74,105 +59,52 @@ class _PaymentPageState extends State<PaymentPage> {
   }
 
   void verifyPayment(String orderId) {
-    print("Verify Payment");
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Payment Successful")),
+    );
+    print("Payment Successful");
   }
 
   void onError(CFErrorResponse errorResponse, String orderId) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Payment Failed: ${errorResponse.getMessage()}")),
+    );
     print(errorResponse.getMessage());
     print("Error while making payment $orderId");
   }
 
-  void cardListener(CFCardListener cardListener) {
-    print("Card Listener triggered");
-    print(cardListener.getNumberOfCharacters());
-    print(cardListener.getType());
-    print(cardListener.getMetaData());
-  }
-
-  // String orderId = "order_3242VhWIOoHkighuJbdpuhWdXE9Bsghjd";
-  // String paymentSessionId = "";
-  void receivedEvent(String event_name, Map<dynamic, dynamic> meta_data) {
-    print(event_name);
-    print(meta_data);
-  }
-
-  // String orderId = "order_18482TC1GWfnEYW3gheFhy4mArfynXh";
-  // String paymentSessionId = "session_gMej8P4gvNUKLbd3fGWVw7Njg5fj3KK4We0HjCg6Tkzy5yZ8mkghdv7vKels1CJ8fBz9_aVpSoU8n5rqufVQrexzhLW0g0dzgdiTJwmrkZYn";
-
-  // String orderId = "order_18482OupTxSofcClBAlgqyYxUVceHo8";
-  // String paymentSessionId = "session_oeYlKCusKyW5pND4Swzn1rE2-gwnoM8MOC2nck9RjIiUQwXcPLWB3U1xHaaItb-uA9H1k6Fwziq9O63DWcfYGy_3B7rl1nDFo3MMeVqiYrBr";
-
-  CFEnvironment environment = CFEnvironment.PRODUCTION;
+  CFEnvironment environment = CFEnvironment.SANDBOX; // testing  mode
+  // CFEnvironment environment = CFEnvironment.PRODUCTION; // production mode
   String selectedId = "";
 
-  upiCollectPay() async {
-    try {
-      var session = createSession();
-      var upi = CFUPIBuilder()
-          .setChannel(CFUPIChannel.COLLECT)
-          .setUPIID("suhasg6@ybl")
-          .build();
-      var upiPayment =
-          CFUPIPaymentBuilder().setSession(session!).setUPI(upi).build();
-      cfPaymentGatewayService.doPayment(upiPayment);
-    } on CFException catch (e) {
-      print(e.message);
-    }
-  }
-
-  netbankingPay() async {
-    try {
-      var session = createSession();
-      var netbanking =
-          CFNetbankingBuilder().setChannel("link").setBankCode(3003).build();
-      var netbankingPayment = CFNetbankingPaymentBuilder()
-          .setSession(session!)
-          .setNetbanking(netbanking)
-          .build();
-      cfPaymentGatewayService.doPayment(netbankingPayment);
-    } on CFException catch (e) {
-      print(e.message);
-    }
-  }
-
-  upiIntentPay() async {
-    // try {
-    //   cfPaymentGatewayService.setCallback(verifyPayment, onError);
-    //   var session = createSession();
-    //   var upi = CFUPIBuilder()
-    //       .setChannel(CFUPIChannel.INTENT)
-    //       .setUPIID(selectedId)
-    //       .build();
-    //   var upiPayment =
-    //       CFUPIPaymentBuilder().setSession(session!).setUPI(upi).build();
-    //   cfPaymentGatewayService.doPayment(upiPayment);
-    // } on CFException catch (e) {
-    //   print(e.message);
-    // }
-  }
-
-  cardPay() async {
-    try {
-      cfPaymentGatewayService.setCallback(verifyPayment, onError);
-      var session = createSession();
-      var card = CFCardBuilder()
-          .setInstrumentId("db178aff-b8cf-420e-b0ba-7af89f0d2263")
-          .setCardCVV("123")
-          .build();
-      var cardPayment = CFCardPaymentBuilder()
-          .setSession(session!)
-          .setCard(card)
-          .savePaymentMethod(true)
-          .build();
-      cfPaymentGatewayService.doPayment(cardPayment);
-    } on CFException catch (e) {
-      print(e.message);
-    }
-  }
-
   pay() async {
+    final amountText = amountController.text.trim();
+    if (amountText.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text("Please Enter Amount")));
+      return;
+    }
+
+    final payableAmount = num.parse(amountText);
+    final orderId = Random().nextInt(1000).toString();
+
     try {
-      var session = createSession();
+      var sessionId = await getAccessToken(payableAmount, orderId);
+      if (sessionId.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Failed to get access token")));
+        print("Session id ${sessionId}");
+        return;
+      }
+
+      /// Testing ke liye getAccessTokenPro ki jagah par getAccessToken kar lena
+
+      var session = CFSessionBuilder()
+          .setEnvironment(environment)
+          .setOrderId(orderId)
+          .setPaymentSessionId(sessionId)
+          .build();
+
       List<CFPaymentModes> components = <CFPaymentModes>[];
       components.add(CFPaymentModes.UPI);
       var paymentComponent =
@@ -185,7 +117,7 @@ class _PaymentPageState extends State<PaymentPage> {
           .build();
 
       var cfDropCheckoutPayment = CFDropCheckoutPaymentBuilder()
-          .setSession(session!)
+          .setSession(session)
           .setPaymentComponent(paymentComponent)
           .setTheme(theme)
           .build();
@@ -194,52 +126,124 @@ class _PaymentPageState extends State<PaymentPage> {
     } on CFException catch (e) {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(e.message)));
-      print(e.message);
+      print("------------>> ${e.message}");
     }
   }
 
-  CFSession? createSession() {
-    print('widget.orderId =-- ${widget.orderId}');
+  // test mode
+
+  Future<String> getAccessToken(num amount, String orderId) async {
+//     Production -> https://api.cashfree.com/pg/orders
+// Sandbox -> https://sandbox.cashfree.com/pg/orders
     try {
-      var oid = widget.orderId;
-      var spi = widget.oderToken;
-      var session = CFSessionBuilder()
-          .setEnvironment(environment)
-          .setOrderId(oid)
-          .setPaymentSessionId(spi)
-          .build();
-      return session;
-    } on CFException catch (e) {
-      print(e.message);
+      final uri =
+          Uri.parse("https://sandbox.cashfree.com/pg/orders"); // Correct URI
+      final headers = {
+        'Content-Type': 'application/json',
+        'x-client-id': "TEST1021250856bb0392d3bff379012680521201", // app ids
+        //CF10212508CPM763IMML80HLA01EA0
+        'x-api-version': '2023-08-01',
+        'x-client-secret':
+            "cfsk_ma_test_71238110f8ebb6a9c8ee711560da0f42_7255766c", // secret client id
+      };
+      final body = jsonEncode({
+        "order_amount": amount,
+        "order_currency": "INR",
+        'order_id': orderId,
+        "customer_details": {
+          "customer_id": "USER123",
+          "customer_name": "joe",
+          "customer_email": "joe.s@cashfree.com",
+          "customer_phone": "+919876543210"
+        },
+        "order_meta": {
+          "return_url": "https://b8af79f41056.eu.ngrok.io?order_id=$orderId",
+        }
+      });
+
+      print("Request Headers: $headers");
+
+      print("Request Body: $body"); // Log the request body
+
+      final res = await http.post(uri, headers: headers, body: body);
+
+      print("Response Status Code: ${res.statusCode}"); // Log status code
+      print("Response Body: ${res.body}"); // Log response body
+
+      if (res.statusCode == 200) {
+        final jsonResponse = jsonDecode(res.body);
+        if (jsonResponse['order_status'] == 'ACTIVE') {
+          cf_order_id = jsonResponse['cf_order_id'];
+          return jsonResponse['payment_session_id'];
+        } else {
+          print("Error response: ${jsonResponse.toString()}");
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(
+                  "Error: ${jsonResponse['message'] ?? 'Unknown error'}")));
+        }
+      } else {
+        print("HTTP error: ${res.statusCode}, ${res.reasonPhrase}");
+
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content:
+                Text("HTTP Error: ${res.statusCode}, ${res.reasonPhrase}")));
+      }
+    } catch (e) {
+      print("Exception: $e");
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Exception: ${e.toString()}")));
     }
-    return null;
+
+    return '';
   }
 
-  newPay() async {
-    cfPaymentGatewayService = CFPaymentGatewayService();
-    cfPaymentGatewayService.setCallback((p0) async {
-      print(p0);
-    }, (p0, p1) async {
-      print(p0);
-      print(p1);
-    });
-    webCheckout();
-  }
-
-  webCheckout() async {
+  /// production mode
+  Future<String> getAccessTokenPro(num amount, String orderId) async {
     try {
-      var session = createSession();
-      var theme = CFThemeBuilder()
-          .setNavigationBarBackgroundColorColor("#ff00ff")
-          .setNavigationBarTextColor("#ffffff")
-          .build();
-      var cfWebCheckout = CFWebCheckoutPaymentBuilder()
-          .setSession(session!)
-          .setTheme(theme)
-          .build();
-      cfPaymentGatewayService.doPayment(cfWebCheckout);
-    } on CFException catch (e) {
-      print(e.message);
+      final uri = Uri.parse("https://api.cashfree.com/pg/orders");
+      final headers = {
+        'Content-Type': 'application/json',
+        'x-client-id': "66800004b8615ebd012c1fba70000866",
+        'x-api-version': '2023-08-01',
+        'x-client-secret':
+            "cfsk_ma_prod_09423c61449b22ca2750debc94640c58_25da1987",
+      };
+      final body = jsonEncode({
+        "order_amount": amount,
+        "order_currency": "INR",
+        'order_id': orderId,
+        "customer_details": {
+          "customer_id": "USER123",
+          "customer_name": "joe",
+          "customer_email": "joe.s@cashfree.com",
+          "customer_phone": "+919876543210"
+        },
+        "order_meta": {
+          "return_url": "https://b8af79f41056.eu.ngrok.io?order_id=$orderId",
+        }
+      });
+
+      final res = await http.post(uri, headers: headers, body: body);
+
+      if (res.statusCode == 200) {
+        final jsonResponse = jsonDecode(res.body);
+        if (jsonResponse['order_status'] == 'ACTIVE') {
+          return jsonResponse['payment_session_id'];
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(
+                  "Error: ${jsonResponse['message'] ?? 'Unknown error'}")));
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content:
+                Text("HTTP Error: ${res.statusCode}, ${res.reasonPhrase}")));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Exception: ${e.toString()}")));
     }
+
+    return '';
   }
 }
