@@ -105,7 +105,14 @@ class _PaymentPageState extends State<PaymentPage> {
           .setPaymentSessionId(sessionId)
           .build();
 
-      List<CFPaymentModes> components = <CFPaymentModes>[];
+      List<CFPaymentModes> components = <CFPaymentModes>[
+        CFPaymentModes.UPI,
+        CFPaymentModes.CARD,
+        CFPaymentModes.NETBANKING,
+        CFPaymentModes.WALLET,
+        CFPaymentModes.EMI,
+        CFPaymentModes.PAYLATER,
+      ];
       components.add(CFPaymentModes.UPI);
       var paymentComponent =
           CFPaymentComponentBuilder().setComponents(components).build();
